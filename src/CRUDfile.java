@@ -7,27 +7,28 @@ import java.lang.String;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-class CRUD<T extends IntroduceMyself> {
-    private  String FILE_NAME = "students.txt";
-    private ArrayList<T> students = new ArrayList<>();
+class CRUD<T> {
+    private  String Path = "students.txt";
+    private ArrayList<T> objects = new ArrayList<>();
     public CRUD(String Path){
-        this.FILE_NAME = Path;
+        this.Path = Path;
+        load();
     }
 
-    public void add(T student) {
-        students.add(student);
+    public void add(Object student) {
+        objects.add((T)student);
         save();
     }
 
-    public void remove(T student) {
-        students.remove(student);
+    public void remove(Object student) {
+        objects.remove((T)student);
         save();
     }
 
-    public void update(T student) {
-        int index = students.indexOf(student);
+    public void update(Object student) {
+        int index = objects.indexOf(student);
         if (index != -1) {
-            students.set(index, student);
+            objects.set(index, (T)student);
             save();
         }
     }
@@ -52,7 +53,7 @@ class CRUD<T extends IntroduceMyself> {
 
     public ArrayList<T> search(Predicate<T> predicate) {
         ArrayList<T> result = new ArrayList<>();
-        for (T student : students) {
+        for (T student : objects) {
             if (predicate.test(student)) {
                 result.add(student);
             }
@@ -61,44 +62,52 @@ class CRUD<T extends IntroduceMyself> {
     }
 
     public ArrayList<T> getAll() {
-        return students;
+        return objects;
     }
 
-    private void save() {
-        Parameter[] fields = students.size() == 0 ? new Parameter[0]: getMaxParamConstructor(students.get(0).getClass()).getParameters();
-        try (PrintWriter writer = new PrintWriter(new FileWriter(FILE_NAME))) {
+    private void save(){
+        Field[] fields = objects.size() == 0 ? new Field[0]: objects.get(0).getClass().getDeclaredFields();
+        try (PrintWriter writer = new PrintWriter(new FileWriter(Path))) {
             String Fields = "", Types = "";
-            for (Parameter f: fields){
+            for (Field f: fields){
                 Fields += f.getName() + ",";
                 Types += f.getType().getName() + ",";
             }
-            writer.println(students.get(0).getClass().getName());
+            writer.println(objects.get(0).getClass().getName());
             writer.println(Fields.substring(0, Fields.length() - 1));
             writer.println(Types.substring(0, Types.length() - 1));
-            for (T student : students) {
-                writer.println(student.toCSV());
+            for (T obj : objects) {
+                writer.println(objectToCSV(obj));
+                save_nested_objects(obj);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
-    /*private void save_nested_objects(T obj){
-        File file = new File(FILE_NAME);
+    private void save_nested_objects(T object){
+        File file = new File(Path);
         String parentPath = file.getParent();
-
-        try( FileWriter writer = new FileWriter(parentPath + "/" + className + ".txt", true)) {
-            writer.write(Fields + "\n");
-        } catch (IOException e) {
-            e.printStackTrace();
+        Field Fs[] = object.getClass().getDeclaredFields();
+        for(Field f:Fs){
+            if(f.getType().getName().split(".").length == 1){
+                CRUD<?> nested = new CRUD<>(parentPath + "/" + object.getClass().getName() + ".txt");
+                if(nested.search(e -> e.hashCode() == object.hashCode()).size()==0){
+                    nested.add(object);
+                }
+            }
         }
-
-    }*/
-    public static <T> String objectToCSV(T object) throws IllegalAccessException {
+    }
+    public static <T> String objectToCSV(T object) {
         StringBuilder csv = new StringBuilder();
         Field[] fields = object.getClass().getDeclaredFields();
         for (Field field : fields) {
             field.setAccessible(true);
-            Object value = field.get(object);
+            Object value = null;
+            try {
+                value = field.get(object);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
             csv.append(value != null ? value.toString() : "");
             csv.append(",");
         }
@@ -108,15 +117,14 @@ class CRUD<T extends IntroduceMyself> {
 
 
     protected  void load() {
-        students.clear();
-        try (BufferedReader reader = new BufferedReader(new FileReader(FILE_NAME))) {
+        objects.clear();
+        try (BufferedReader reader = new BufferedReader(new FileReader(Path))) {
             String line = reader.readLine();
             String className = line;
             String[] colums = reader.readLine().split(",");
             String types = reader.readLine();
-            Constructor<?> constructor = constructor(className,types);
             while ((line = reader.readLine()) != null) {
-                students.add((T) csvToObject(constructor,types,line));
+                objects.add((T) csvToObject(line,types,Class.forName(className)));
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -135,7 +143,7 @@ class CRUD<T extends IntroduceMyself> {
         Constructor<?> constructor = clazz.getConstructor(paramClasses);
         return constructor;
     }
-    public <T> T csvToObjectT(String csv, String dataTypeString, Class<T> clazz) throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException, ClassNotFoundException {
+    public <T> T csvToObject(String csv, String dataTypeString, Class<T> clazz) throws InstantiationException, IllegalAccessException, NoSuchMethodException, InvocationTargetException, ClassNotFoundException {
         String[] values = csv.split(",");
         String[] types = dataTypeString.split(",");
         T object = clazz.getDeclaredConstructor().newInstance();
@@ -147,39 +155,6 @@ class CRUD<T extends IntroduceMyself> {
         }
         return object;
     }
-
-
-    public Object csvToObject(Constructor<?> constructor, String dataTypeString, String dataString) throws Exception {
-        String[] dataTypes = dataTypeString.split(",");
-        String[] dataValues = dataString.split(",");
-
-        Object[] arguments = new Object[dataTypes.length];
-
-        for (int i = 0; i < dataTypes.length; i++) {
-            String dataType = dataTypes[i].trim();
-            String dataValue = dataValues[i].trim();
-            arguments[i] = convertValue(dataType,dataValue);
-
-        }
-        return constructor.newInstance(arguments);
-    }
-
-
-    public static Constructor<?> getMaxParamConstructor(Class<?> clazz) {
-        Constructor<?>[] constructors = clazz.getConstructors();
-        int maxParamCount = 0;
-        Constructor<?> maxParamConstructor = null;
-
-        for (Constructor<?> constructor : constructors) {
-            int paramCount = constructor.getParameterCount();
-            if (paramCount > maxParamCount) {
-                maxParamCount = paramCount;
-                maxParamConstructor = constructor;
-            }
-        }
-        return maxParamConstructor;
-    }
-
     public Object convertValue(String type, String value) throws ClassNotFoundException, NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
         if (type.split(".").length == 3) {
             if (type.split(".")[1].equals("util")) {
@@ -250,7 +225,7 @@ class CRUD<T extends IntroduceMyself> {
                 }
                 return date;
             default:
-                File file = new File(FILE_NAME);
+                File file = new File(Path);
                 File Folder = new File(file.getParent());
                 if(Folder.isDirectory()){
                     String f[] = Folder.list();
