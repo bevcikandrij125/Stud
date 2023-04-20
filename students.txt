@@ -1,0 +1,6 @@
+Group
+arg0,arg1,arg2,arg3
+java.lang.String,java.lang.String,Teacher,java.util.TreeSet
+Group 1,Specialty 1,Teacher@7c3df479,[Student@7106e68e, Student@7eda2dbb, Student@6576fe71, Student@76fb509a, Student@300ffa5d, Student@1f17ae12, Student@4d405ef7, Student@6193b845, Student@2e817b38]
+Group 2,Specialty 2,Teacher@433c675d,[Student@3f91beef, Student@1a6c5a9e, Student@37bba400, Student@179d3b25, Student@254989ff, Student@5d099f62, Student@37f8bb67, Student@49c2faae, Student@20ad9418, Student@31cefde0]
+Group 3,Specialty 3,Teacher@439f5b3d,[Student@1d56ce6a, Student@5197848c, Student@17f052a3, Student@2e0fa5d3, Student@5010be6, Student@685f4c2e, Student@7daf6ecc, Student@2e5d6d97]
